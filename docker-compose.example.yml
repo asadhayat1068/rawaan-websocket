@@ -1,0 +1,74 @@
+version: '3.8'
+
+services:
+  # Your existing websocket service
+  websocket-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: simple-websocket-server
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+      - "8080:8080"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - WS_PORT=8080
+    networks:
+      - fleetbase  # Using your fleetbase network
+    volumes:
+      - ./logs:/usr/src/app/logs
+
+  # Example client service that sends requests
+  api-client:
+    image: alpine/curl
+    container_name: websocket-client
+    networks:
+      - fleetbase  # Same network as websocket-app
+    depends_on:
+      - websocket-app
+    command: >
+      sh -c "
+        echo 'Waiting for websocket-app to be ready...'
+        sleep 10
+        echo 'Sending test SMS request:'
+        curl -X POST http://websocket-app:3000/api/sms/send \
+          -H 'Content-Type: application/json' \
+          -d '{\"recipient\": \"+1234567890\", \"message\": \"Hello from Docker container!\"}' \
+          -v
+        echo 'Sending broadcast request:'
+        curl -X POST http://websocket-app:3000/api/broadcast \
+          -H 'Content-Type: application/json' \
+          -d '{\"message\": \"Broadcast from Docker container!\", \"type\": \"notification\"}' \
+          -v
+        echo 'Getting status:'
+        curl http://websocket-app:3000/api/status -v
+        "
+
+  # Example Node.js service that sends requests
+  node-client:
+    image: node:18-alpine
+    container_name: websocket-node-client
+    networks:
+      - fleetbase
+    depends_on:
+      - websocket-app
+    working_dir: /app
+    volumes:
+      - ./client-examples:/app
+    command: >
+      sh -c "
+        npm init -y
+        npm install axios
+        node client.js
+        "
+
+networks:
+  fleetbase:
+    driver: bridge
+    name: fleetbase
+
+volumes:
+  app-logs:
+    driver: local

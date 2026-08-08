@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Client</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+        .connected { background-color: #d4edda; color: #155724; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+        .messages {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin: 10px 0;
+            background-color: #fafafa;
+        }
+        .message {
+            margin: 5px 0;
+            padding: 8px;
+            background-color: #e3f2fd;
+            border-left: 3px solid #2196f3;
+            border-radius: 4px;
+        }
+        .timestamp {
+            font-size: 0.8em;
+            color: #666;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn-primary { background-color: #007bff; color: white; }
+        .btn-secondary { background-color: #6c757d; color: white; }
+        .btn-success { background-color: #28a745; color: white; }
+        button:hover { opacity: 0.9; }
+        input, textarea {
+            width: 100%;
+            padding: 8px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        .api-section {
+            margin-top: 20px;
+            padding: 15px;
+            background-color: #f8f9fa;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>WebSocket Client Test</h1>
+        
+        <div id="status" class="status disconnected">
+            Disconnected
+        </div>
+        
+        <div>
+            <button id="connectBtn" class="btn-primary" onclick="connect()">Connect</button>
+            <button id="disconnectBtn" class="btn-secondary" onclick="disconnect()">Disconnect</button>
+            <button class="btn-success" onclick="clearMessages()">Clear Messages</button>
+        </div>
+        
+        <div class="messages" id="messages">
+            <div class="message">Welcome! Click "Connect" to start receiving messages.</div>
+        </div>
+        
+        <div class="api-section">
+            <h3>Test API Endpoints</h3>
+            <p>Use these buttons to test the REST API endpoints that send messages to this WebSocket client:</p>
+            
+            <div>
+                <h4>Send SMS Message</h4>
+                <input type="text" id="smsRecipient" placeholder="Recipient (optional)" />
+                <input type="text" id="smsMessage" placeholder="SMS Message" value="Test SMS from API" />
+                <button class="btn-primary" onclick="sendSMS()">Send SMS</button>
+            </div>
+            
+            <div>
+                <h4>Broadcast Message</h4>
+                <input type="text" id="broadcastMessage" placeholder="Broadcast Message" value="Test broadcast from API" />
+                <input type="text" id="messageType" placeholder="Message Type (optional)" value="notification" />
+                <button class="btn-primary" onclick="sendBroadcast()">Send Broadcast</button>
+            </div>
+            
+            <div>
+                <button class="btn-secondary" onclick="sendTestMessage()">Send Test Message</button>
+                <button class="btn-secondary" onclick="checkStatus()">Check Server Status</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let socket = null;
+        const statusEl = document.getElementById('status');
+        const messagesEl = document.getElementById('messages');
+        const connectBtn = document.getElementById('connectBtn');
+        const disconnectBtn = document.getElementById('disconnectBtn');
+
+        function connect() {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                addMessage('Already connected!', 'warning');
+                return;
+            }
+
+            socket = new WebSocket('ws://localhost:8080');
+            
+            socket.onopen = function(event) {
+                statusEl.textContent = 'Connected to WebSocket server';
+                statusEl.className = 'status connected';
+                connectBtn.disabled = true;
+                disconnectBtn.disabled = false;
+                addMessage('Connected to WebSocket server', 'success');
+            };
+            
+            socket.onmessage = function(event) {
+                let message = event.data;
+                let messageObj = null;
+                
+                // Try to parse as JSON
+                try {
+                    messageObj = JSON.parse(message);
+                    addMessage(`${messageObj.type || 'Message'}: ${messageObj.message || message}`, 'info', messageObj);
+                } catch (e) {
+                    addMessage(message, 'info');
+                }
+            };
+            
+            socket.onclose = function(event) {
+                statusEl.textContent = 'Disconnected from WebSocket server';
+                statusEl.className = 'status disconnected';
+                connectBtn.disabled = false;
+                disconnectBtn.disabled = true;
+                addMessage('Disconnected from WebSocket server', 'warning');
+            };
+            
+            socket.onerror = function(error) {
+                addMessage('WebSocket error: ' + error, 'error');
+            };
+        }
+
+        function disconnect() {
+            if (socket) {
+                socket.close();
+            }
+        }
+
+        function addMessage(message, type = 'info', data = null) {
+            const messageEl = document.createElement('div');
+            messageEl.className = 'message';
+            
+            const timestamp = new Date().toLocaleTimeString();
+            let content = `<div><strong>${message}</strong></div>`;
+            
+            if (data) {
+                content += `<div style="font-size: 0.9em; margin-top: 5px; color: #555;">`;
+                if (data.recipient) content += `Recipient: ${data.recipient}<br>`;
+                if (data.id) content += `ID: ${data.id}<br>`;
+                content += `</div>`;
+            }
+            
+            content += `<div class="timestamp">${timestamp}</div>`;
+            messageEl.innerHTML = content;
+            
+            messagesEl.appendChild(messageEl);
+            messagesEl.scrollTop = messagesEl.scrollHeight;
+        }
+
+        function clearMessages() {
+            messagesEl.innerHTML = '';
+        }
+
+        // API Test Functions
+        async function sendSMS() {
+            const recipient = document.getElementById('smsRecipient').value;
+            const message = document.getElementById('smsMessage').value;
+            
+            if (!message) {
+                alert('Please enter an SMS message');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/sms/send', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ recipient, message })
+                });
+                
+                const result = await response.json();
+                addMessage(`API Response: SMS sent to ${result.messageSentTo} clients`, 'api');
+            } catch (error) {
+                addMessage('API Error: ' + error.message, 'error');
+            }
+        }
+
+        async function sendBroadcast() {
+            const message = document.getElementById('broadcastMessage').value;
+            const type = document.getElementById('messageType').value;
+            
+            if (!message) {
+                alert('Please enter a broadcast message');
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/broadcast', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ message, type })
+                });
+                
+                const result = await response.json();
+                addMessage(`API Response: Broadcast sent to ${result.messageSentTo} clients`, 'api');
+            } catch (error) {
+                addMessage('API Error: ' + error.message, 'error');
+            }
+        }
+
+        async function sendTestMessage() {
+            try {
+                const response = await fetch('/api/test', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' }
+                });
+                
+                const result = await response.json();
+                addMessage(`API Response: Test message sent to ${result.messageSentTo} clients`, 'api');
+            } catch (error) {
+                addMessage('API Error: ' + error.message, 'error');
+            }
+        }
+
+        async function checkStatus() {
+            try {
+                const response = await fetch('/api/status');
+                const result = await response.json();
+                addMessage(`Server Status: ${result.connectedClients} clients connected`, 'api');
+            } catch (error) {
+                addMessage('API Error: ' + error.message, 'error');
+            }
+        }
+
+        // Auto-connect on page load
+        window.onload = function() {
+            // Don't auto-connect, let user choose
+            disconnectBtn.disabled = true;
+        };
+    </script>
+</body>
+</html>

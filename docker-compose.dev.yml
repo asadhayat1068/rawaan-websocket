@@ -1,0 +1,35 @@
+version: '3.8'
+
+services:
+  websocket-app-dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development  # Use development stage if multi-stage build
+    container_name: simple-websocket-server-dev
+    restart: unless-stopped
+    ports:
+      - "3000:3818"   # Express HTTP server
+      - "8080:3819"   # WebSocket server
+      - "9229:9229"   # Node.js debugger port
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - WS_PORT=8080
+      - DEBUG=*
+    networks:
+      - websocket-network-dev
+    volumes:
+      # Mount source code for hot reloading during development
+      - .:/usr/src/app
+      - /usr/src/app/node_modules  # Prevent overwriting node_modules
+      - ./logs:/usr/src/app/logs
+    command: ["npm", "run", "dev"]  # Use development command if available
+    labels:
+      - "com.example.description=Simple WebSocket server (Development)"
+      - "com.example.service=websocket-server-dev"
+
+networks:
+  websocket-network-dev:
+    driver: bridge
+    name: websocket-network-dev
