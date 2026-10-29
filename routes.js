@@ -1,5 +1,5 @@
 const express = require('express');
-const { broadcast, getConnectedClientsCount, getConnectedClients } = require('./socket');
+const { broadcast, getConnectedClientsCount, getConnectedClients, getGatewayCount } = require('./socket');
 
 const router = express.Router();
 
@@ -8,6 +8,7 @@ router.get('/status', (req, res) => {
     res.json({
         status: 'running',
         connectedClients: getConnectedClientsCount(),
+        authenticatedGateways: getGatewayCount(),
         timestamp: new Date().toISOString(),
         server: 'WebSocket + Express API'
     });
